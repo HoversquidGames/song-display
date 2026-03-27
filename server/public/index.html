@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Media Overlay</title>
+  <style>
+    :root {
+      --title-size: 48px;
+      --chapter-size: 28px;
+      --time-size: 18px;
+      --status-size: 20px;
+
+      --thumb-width: 256px;
+      --thumb-height: 144px;
+      --thumb-radius: 14px;
+      --thumb-gap: 20px;
+
+      --content-width: 900px;
+      --bar-height: 14px;
+
+      --text-color: #ffffff;
+      --shadow: 0 3px 12px rgba(0, 0, 0, 0.85);
+      --bar-bg: rgba(255, 255, 255, 0.18);
+      --bar-fill: linear-gradient(90deg, #ff4d4d 0%, #ff8a65 100%);
+      --x-pad: 24px;
+      --y-pad: 20px;
+      --debug-bg: rgba(0, 0, 0, 0.45);
+
+      --marquee-speed: 34; /* pixels per second */
+      --marquee-hold: 0.8; /* seconds to pause at edges */
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text-color);
+      pointer-events: none;
+    }
+
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: var(--y-pad) var(--x-pad);
+      background: transparent;
+    }
+
+    .stack {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      max-width: min(calc(var(--thumb-width) + var(--thumb-gap) + var(--content-width)), 96vw);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .mainRow {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--thumb-gap);
+      width: 100%;
+    }
+
+    .thumbWrap {
+      width: var(--thumb-width);
+      height: var(--thumb-height);
+      flex: 0 0 var(--thumb-width);
+      border-radius: var(--thumb-radius);
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.12),
+        0 10px 24px rgba(0, 0, 0, 0.45);
+      background: rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(2px);
+    }
+
+    #thumbnail {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+    }
+
+    #thumbnail.loaded {
+      opacity: 1;
+    }
+
+    .rightCol {
+      width: min(var(--content-width), calc(96vw - var(--thumb-width) - var(--thumb-gap)));
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 2px;
+    }
+
+    .marqueeViewport {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .marqueeContent {
+      display: inline-block;
+      white-space: nowrap;
+      will-change: transform;
+      transform: translateX(0);
+    }
+
+    .titleLine,
+    .chapterLine {
+      text-shadow: var(--shadow);
+      color: var(--text-color);
+      white-space: nowrap;
+      line-height: 1.1;
+      margin: 0;
+    }
+
+    .titleLine {
+      font-size: var(--title-size);
+      font-weight: 800;
+    }
+
+    .chapterLine {
+      font-size: var(--chapter-size);
+      font-weight: 600;
+      opacity: 0.95;
+    }
+
+    .progressBlock {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .progressOuter {
+      width: 100%;
+      height: var(--bar-height);
+      border-radius: 999px;
+      background: var(--bar-bg);
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        0 2px 10px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(2px);
+    }
+
+    .progressInner {
+      width: 0%;
+      height: 100%;
+      border-radius: 999px;
+      background: var(--bar-fill);
+      transform-origin: left center;
+    }
+
+    .timeRow {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      gap: 12px;
+      font-size: var(--time-size);
+      font-weight: 700;
+      color: var(--text-color);
+      text-shadow: var(--shadow);
+      letter-spacing: 0.02em;
+    }
+
+    #elapsedLabel,
+    #totalLabel {
+      white-space: nowrap;
+    }
+
+    #statusBox {
+      display: inline-block;
+      padding: 10px 14px;
+      font-size: var(--status-size);
+      font-weight: 700;
+      color: var(--text-color);
+      text-shadow: var(--shadow);
+      background: var(--debug-bg);
+      border-radius: 12px;
+      white-space: pre-wrap;
+    }
+
+    body.obs-mode #statusBox {
+      display: none;
+    }
+
+    .mainRow.no-thumb .rightCol {
+      width: min(var(--content-width), 96vw);
+    }
+
+    .thumbWrap.no-src {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .thumbWrap.no-src #thumbnail {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay">
+    <div id="stack" class="stack hidden">
+      <div class="mainRow">
+        <div class="thumbWrap">
+          <img id="thumbnail" alt="Video thumbnail" />
+        </div>
+
+        <div class="rightCol">
+          <div id="titleViewport" class="marqueeViewport">
+            <div id="videoTitle" class="marqueeContent titleLine"></div>
+          </div>
+
+          <div id="chapterViewport" class="marqueeViewport hidden">
+            <div id="chapterTitle" class="marqueeContent chapterLine"></div>
+          </div>
+
+          <div id="progressBlock" class="progressBlock hidden">
+            <div class="progressOuter">
+              <div id="progressInner" class="progressInner"></div>
+            </div>
+            <div class="timeRow">
+              <span id="elapsedLabel">0:00</span>
+              <span id="totalLabel">0:00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="statusBox">Waiting for overlay data…</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const obsMode = params.get("obs") === "1";
+
+    if (obsMode) {
+      document.body.classList.add("obs-mode");
+    }
+
+    const stackEl = document.getElementById("stack");
+    const statusBoxEl = document.getElementById("statusBox");
+    const thumbnailEl = document.getElementById("thumbnail");
+    const thumbWrapEl = document.querySelector(".thumbWrap");
+    const mainRowEl = document.querySelector(".mainRow");
+
+    const titleViewportEl = document.getElementById("titleViewport");
+    const videoTitleEl = document.getElementById("videoTitle");
+
+    const chapterViewportEl = document.getElementById("chapterViewport");
+    const chapterTitleEl = document.getElementById("chapterTitle");
+
+    const progressBlockEl = document.getElementById("progressBlock");
+    const progressInnerEl = document.getElementById("progressInner");
+    const elapsedLabelEl = document.getElementById("elapsedLabel");
+    const totalLabelEl = document.getElementById("totalLabel");
+
+    let state = {
+      active: false,
+      source: null,
+      videoId: "",
+      videoTitle: "",
+      chapterTitle: "",
+      thumbnailUrl: null,
+      playing: false,
+      baseCurrentTime: 0,
+      duration: null,
+      progress: null,
+      receivedAtMs: performance.now(),
+      connected: false
+    };
+
+    let eventSource = null;
+    let lastThumbSrc = "";
+
+    const marqueeState = {
+      title: createMarqueeState(titleViewportEl, videoTitleEl),
+      chapter: createMarqueeState(chapterViewportEl, chapterTitleEl)
+    };
+
+    function createMarqueeState(viewportEl, contentEl) {
+      return {
+        viewportEl,
+        contentEl,
+        overflow: 0,
+        offset: 0,
+        dir: -1,
+        holdUntil: 0
+      };
+    }
+
+    function formatTime(seconds) {
+      if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+
+      const total = Math.floor(seconds);
+      const hrs = Math.floor(total / 3600);
+      const mins = Math.floor((total % 3600) / 60);
+      const secs = total % 60;
+
+      if (hrs > 0) {
+        return `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+      }
+
+      return `${mins}:${String(secs).padStart(2, "0")}`;
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function setStatus(text) {
+      if (!obsMode) {
+        statusBoxEl.textContent = text;
+      }
+    }
+
+    function getEffectiveThumbnailUrl() {
+      if (state.thumbnailUrl) return state.thumbnailUrl;
+      if ((!state.source || state.source === "youtube") && state.videoId) {
+        return `https://i.ytimg.com/vi/${encodeURIComponent(state.videoId)}/hqdefault.jpg`;
+      }
+      return null;
+    }
+
+    function resetMarquee(m) {
+      m.offset = 0;
+      m.dir = -1;
+      m.holdUntil = 0;
+      m.contentEl.style.transform = "translateX(0px)";
+    }
+
+    function measureMarquee(m) {
+      const viewportWidth = m.viewportEl.clientWidth;
+      const contentWidth = m.contentEl.scrollWidth;
+      m.overflow = Math.max(0, contentWidth - viewportWidth);
+
+      if (m.overflow <= 0) {
+        resetMarquee(m);
+      } else {
+        m.offset = clamp(m.offset, -m.overflow, 0);
+      }
+    }
+
+    function updateMarquee(m, dt, nowSec) {
+      if (!m.viewportEl || !m.contentEl || m.viewportEl.classList.contains("hidden")) {
+        return;
+      }
+
+      measureMarquee(m);
+
+      if (m.overflow <= 0) {
+        return;
+      }
+
+      if (nowSec < m.holdUntil) {
+        m.contentEl.style.transform = `translateX(${m.offset}px)`;
+        return;
+      }
+
+      const speed = Number(getComputedStyle(document.documentElement).getPropertyValue("--marquee-speed")) || 34;
+      m.offset += m.dir * speed * dt;
+
+      if (m.offset <= -m.overflow) {
+        m.offset = -m.overflow;
+        m.dir = 1;
+        m.holdUntil = nowSec + (Number(getComputedStyle(document.documentElement).getPropertyValue("--marquee-hold")) || 0.8);
+      } else if (m.offset >= 0) {
+        m.offset = 0;
+        m.dir = -1;
+        m.holdUntil = nowSec + (Number(getComputedStyle(document.documentElement).getPropertyValue("--marquee-hold")) || 0.8);
+      }
+
+      m.contentEl.style.transform = `translateX(${m.offset}px)`;
+    }
+
+    function applyPayload(data) {
+      if (!data || !data.active) {
+        state = {
+          active: false,
+          source: null,
+          videoId: "",
+          videoTitle: "",
+          chapterTitle: "",
+          thumbnailUrl: null,
+          playing: false,
+          baseCurrentTime: 0,
+          duration: null,
+          progress: null,
+          receivedAtMs: performance.now(),
+          connected: true
+        };
+        render(true);
+        return;
+      }
+
+      const videoChanged = state.videoId !== (data.videoId || "");
+      const titleChanged = state.videoTitle !== (data.videoTitle || "");
+      const chapterChanged = state.chapterTitle !== (data.chapterTitle || "");
+
+      state = {
+        active: true,
+        source: data.source || "youtube",
+        videoId: data.videoId || "",
+        videoTitle: data.videoTitle || "",
+        chapterTitle: data.chapterTitle || "",
+        thumbnailUrl: data.thumbnailUrl || null,
+        playing: Boolean(data.playing),
+        baseCurrentTime: Number(data.currentTime || 0),
+        duration: Number.isFinite(data.duration) ? Number(data.duration) : null,
+        progress: data.progress || null,
+        receivedAtMs: performance.now(),
+        connected: true
+      };
+
+      if (videoChanged || titleChanged) {
+        resetMarquee(marqueeState.title);
+      }
+
+      if (videoChanged || chapterChanged) {
+        resetMarquee(marqueeState.chapter);
+      }
+
+      render(true);
+    }
+
+    function getDisplayCurrentTime() {
+      if (!state.active) return 0;
+      if (!state.playing) return state.baseCurrentTime;
+
+      const deltaSeconds = (performance.now() - state.receivedAtMs) / 1000;
+      const raw = state.baseCurrentTime + deltaSeconds;
+
+      if (Number.isFinite(state.duration) && state.duration > 0) {
+        return Math.min(raw, state.duration);
+      }
+
+      return raw;
+    }
+
+    function render(forceMeasure = false) {
+      if (!state.connected) {
+        stackEl.classList.add("hidden");
+        setStatus("Connecting to server…");
+        document.title = "Media Overlay";
+        return;
+      }
+
+      if (!state.active || !state.videoTitle) {
+        stackEl.classList.add("hidden");
+        setStatus(
+          "No active media detected.\n\nCheck:\n- the extension is loaded\n- the extension was reloaded after edits\n- a YouTube, SoundCloud, or Last.FM tab is open\n- /current returns active: true"
+        );
+        document.title = "Media Overlay";
+        return;
+      }
+
+      stackEl.classList.remove("hidden");
+      setStatus("");
+
+      videoTitleEl.textContent = state.videoTitle;
+
+      const thumbUrl = getEffectiveThumbnailUrl() || "";
+      if (thumbUrl !== lastThumbSrc) {
+        lastThumbSrc = thumbUrl;
+        thumbnailEl.classList.remove("loaded");
+        if (thumbUrl) {
+          thumbnailEl.alt = state.videoTitle ? `${state.videoTitle} thumbnail` : "Thumbnail";
+          thumbnailEl.src = thumbUrl;
+          thumbWrapEl.classList.remove("no-src");
+        } else {
+          thumbnailEl.src = "";
+          thumbWrapEl.classList.add("no-src");
+        }
+      }
+
+      // Poll every frame — catches images that load without firing the load event
+      if (lastThumbSrc && thumbnailEl.complete && thumbnailEl.naturalWidth > 0) {
+        thumbnailEl.classList.add("loaded");
+      }
+
+      if (state.chapterTitle && state.chapterTitle.trim()) {
+        chapterTitleEl.textContent = state.chapterTitle;
+        chapterViewportEl.classList.remove("hidden");
+        document.title = `${state.videoTitle} — ${state.chapterTitle}`;
+      } else {
+        chapterTitleEl.textContent = "";
+        chapterViewportEl.classList.add("hidden");
+        resetMarquee(marqueeState.chapter);
+        document.title = state.videoTitle;
+      }
+
+      const currentTime = getDisplayCurrentTime();
+      const progress = state.progress;
+
+      if (!progress) {
+        progressBlockEl.classList.add("hidden");
+      } else {
+        let elapsed = 0;
+        let total = null;
+
+        if (progress.mode === "chapter") {
+          const start = Number(progress.start || 0);
+          const end = Number.isFinite(progress.end) ? Number(progress.end) : null;
+          elapsed = Math.max(0, currentTime - start);
+          total = end != null ? Math.max(0, end - start) : null;
+        } else {
+          elapsed = Math.max(0, currentTime);
+          total = Number.isFinite(state.duration) ? Math.max(0, state.duration) : null;
+        }
+
+        if (total != null) {
+          elapsed = Math.min(elapsed, total);
+        }
+
+        const ratio =
+          total != null && total > 0 ? clamp(elapsed / total, 0, 1) : 0;
+
+        progressBlockEl.classList.remove("hidden");
+        progressInnerEl.style.width = `${ratio * 100}%`;
+        elapsedLabelEl.textContent = formatTime(elapsed);
+        totalLabelEl.textContent = total != null ? formatTime(total) : "--:--";
+      }
+
+      if (forceMeasure) {
+        measureMarquee(marqueeState.title);
+        measureMarquee(marqueeState.chapter);
+      }
+    }
+
+    async function fallbackRefresh() {
+      try {
+        const res = await fetch("/current", { cache: "no-store" });
+        const data = await res.json();
+        applyPayload(data);
+      } catch (err) {
+        state.connected = false;
+        render(true);
+      }
+    }
+
+    function connectEvents() {
+      if (eventSource) {
+        eventSource.close();
+      }
+
+      eventSource = new EventSource("/events");
+
+      eventSource.onopen = () => {
+        state.connected = true;
+        render(true);
+      };
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          applyPayload(data);
+        } catch (err) {
+          console.error("Bad SSE payload:", err);
+        }
+      };
+
+      eventSource.onerror = () => {
+        state.connected = false;
+        render(true);
+      };
+    }
+
+    let lastFrameMs = performance.now();
+
+    function animationLoop(nowMs) {
+      const dt = Math.min(0.05, Math.max(0, (nowMs - lastFrameMs) / 1000));
+      lastFrameMs = nowMs;
+
+      render(false);
+
+      const nowSec = nowMs / 1000;
+      updateMarquee(marqueeState.title, dt, nowSec);
+      updateMarquee(marqueeState.chapter, dt, nowSec);
+
+      requestAnimationFrame(animationLoop);
+    }
+
+    window.addEventListener("resize", () => {
+      measureMarquee(marqueeState.title);
+      measureMarquee(marqueeState.chapter);
+    });
+
+    thumbnailEl.addEventListener("load", () => {
+      thumbnailEl.classList.add("loaded");
+    });
+
+    thumbnailEl.addEventListener("error", () => {
+      thumbnailEl.classList.remove("loaded");
+      if ((!state.source || state.source === "youtube") && state.videoId) {
+        const fallback = `https://i.ytimg.com/vi/${encodeURIComponent(state.videoId)}/mqdefault.jpg`;
+        if (thumbnailEl.src !== fallback) {
+          lastThumbSrc = fallback;
+          thumbnailEl.src = fallback;
+        }
+      }
+    });
+
+    fallbackRefresh();
+    connectEvents();
+    requestAnimationFrame(animationLoop);
+  </script>
+</body>
+</html>

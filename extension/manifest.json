@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Chapter Display",
+  "version": "1.1.0",
+  "description": "Captures the current chapter/track from YouTube, SoundCloud, and Last.FM tabs and sends it to a local server.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "yt-chapter-capture@example.local"
+    }
+  },
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "*://www.youtube.com/*",
+    "*://youtube.com/*",
+    "*://soundcloud.com/*",
+    "*://www.last.fm/*",
+    "*://last.fm/*",
+    "http://127.0.0.1:4317/*",
+    "http://localhost:4317/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://www.youtube.com/watch*",
+        "*://youtube.com/watch*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://soundcloud.com/*"
+      ],
+      "js": ["soundcloud-content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://www.last.fm/*",
+        "*://last.fm/*"
+      ],
+      "js": ["lastfm-content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
