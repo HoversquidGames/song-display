@@ -34,6 +34,22 @@
     return null;
   }
 
+  function getUploaderName() {
+    const candidates = [
+      "ytd-video-owner-renderer #channel-name yt-formatted-string",
+      "ytd-video-owner-renderer #channel-name a",
+      "#owner #channel-name a",
+      "ytd-channel-name yt-formatted-string",
+      "ytd-channel-name a"
+    ];
+    for (const selector of candidates) {
+      const el = document.querySelector(selector);
+      const text = el?.textContent?.trim();
+      if (text) return text;
+    }
+    return null;
+  }
+
   function getCurrentChapterFromDom() {
     const selectors = [
       ".ytp-chapter-title-content",
@@ -67,6 +83,7 @@
       href: location.href,
       videoId,
       videoTitle: getVideoTitle(),
+      uploaderName: getUploaderName(),
       currentTime,
       duration,
       playing,

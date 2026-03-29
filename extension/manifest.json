@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Chapter Display",
+  "name": "Song Display",
   "version": "1.1.0",
-  "description": "Captures the current chapter/track from YouTube, SoundCloud, and Last.FM tabs and sends it to a local server.",
+  "description": "Captures the current chapter/track from YouTube, SoundCloud, sends it to a local server.",
   "browser_specific_settings": {
     "gecko": {
       "id": "yt-chapter-capture@example.local"

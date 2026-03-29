@@ -326,6 +326,7 @@ app.post("/capture", async (req, res) => {
             // YouTube fields
             videoId,
             videoTitle,
+            uploaderName,
             chapterFromDom,
             // SoundCloud / Last.FM fields
             artistName,
@@ -355,7 +356,7 @@ app.post("/capture", async (req, res) => {
         const effectiveVideoId = isYoutube
             ? videoId
             : `${source}::${artistName}::${songTitle}`;
-        const effectiveVideoTitle = isYoutube ? (videoTitle || "Unknown Video") : artistName;
+        let effectiveVideoTitle = isYoutube ? (videoTitle || "Unknown Video") : artistName;
 
         let chapterTitle = null;
         let chapterRange = null;
@@ -374,6 +375,12 @@ app.post("/capture", async (req, res) => {
             if (resolved) {
                 chapterTitle = chapterTitle || resolved.title;
                 chapterRange = { start: resolved.start, end: resolved.end };
+            }
+
+            // No chapters: show uploader as main title, video title as chapter text.
+            if (!chapterTitle && uploaderName) {
+                chapterTitle = effectiveVideoTitle;
+                effectiveVideoTitle = uploaderName;
             }
 
             if (!effectiveDuration) {
