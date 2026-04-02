@@ -2,6 +2,7 @@ Song Display
 ----------------
 
 Required Firefox Addon: https://addons.mozilla.org/en-US/firefox/addon/song-display/
+
 Also requires yt-dlp to be installed: https://github.com/yt-dlp/yt-dlp/releases
 
 Meant for albums or playlists on Youtube to be shown on a Browser Source.
