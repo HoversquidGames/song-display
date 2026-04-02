@@ -1,0 +1,10 @@
+{
+  "fonts": {
+    "family": "Arial, Helvetica, sans-serif",
+    "titleSize": "48px",
+    "chapterSize": "28px",
+    "timeSize": "18px",
+    "statusSize": "20px"
+  },
+  "logCaptures": false
+}

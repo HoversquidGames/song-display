@@ -5,7 +5,11 @@
   "description": "Captures the current chapter/track from YouTube, SoundCloud, sends it to a local server.",
   "browser_specific_settings": {
     "gecko": {
-      "id": "yt-chapter-capture@example.local"
+      "id": "yt-chapter-capture@example.local",
+      "data_collection_permissions": {
+        "required": ["websiteContent"],
+        "optional": []
+      }
     }
   },
   "background": {

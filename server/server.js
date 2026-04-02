@@ -12,6 +12,54 @@ const PORT = 4317;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --- Config loading ---
+
+const DEFAULT_CONFIG = {
+    fonts: {
+        family: "Arial, Helvetica, sans-serif",
+        titleSize: "48px",
+        chapterSize: "28px",
+        timeSize: "18px",
+        statusSize: "20px"
+    },
+    logCaptures: false
+};
+
+function loadConfig() {
+    const searchPaths = [
+        path.join(path.dirname(process.execPath), "config.json"),
+        path.join(__dirname, "config.json")
+    ];
+
+    for (const p of searchPaths) {
+        try {
+            const raw = JSON.parse(fs.readFileSync(p, "utf8"));
+            return {
+                ...DEFAULT_CONFIG,
+                ...raw,
+                fonts: { ...DEFAULT_CONFIG.fonts, ...(raw.fonts || {}) }
+            };
+        } catch {
+            // Try next location
+        }
+    }
+
+    // No config found — write defaults next to exe so the user can edit it
+    try {
+        const exeConfigPath = path.join(path.dirname(process.execPath), "config.json");
+        fs.writeFileSync(exeConfigPath, JSON.stringify(DEFAULT_CONFIG, null, 2) + "\n", "utf8");
+        console.log(`Created default config at ${exeConfigPath}`);
+    } catch {
+        console.warn("Could not write default config.json (check write permissions next to the exe).");
+    }
+
+    return DEFAULT_CONFIG;
+}
+
+const config = loadConfig();
+
+// --- End config ---
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -25,7 +73,9 @@ app.use((req, res, next) => {
 
 const videoMetaCache = new Map();
 const latestByTab = new Map();
-const logStream = createWriteStream(path.join(__dirname, "captures.ndjson"), { flags: "a" });
+const logStream = config.logCaptures
+    ? createWriteStream(path.join(__dirname, "captures.ndjson"), { flags: "a" })
+    : null;
 const sseClients = new Set();
 let ytDlpPathPromise = null;
 
@@ -425,7 +475,7 @@ app.post("/capture", async (req, res) => {
         latestByTab.set(dedupeKey, record);
 
         if (changed) {
-            logStream.write(JSON.stringify(record) + "\n");
+            if (logStream) logStream.write(JSON.stringify(record) + "\n");
             broadcastCurrent();
         }
 
@@ -469,6 +519,18 @@ app.get("/latest", (req, res) => {
         ok: true,
         tabs: Array.from(latestByTab.values())
     });
+});
+
+app.get("/theme.css", (_req, res) => {
+    const f = config.fonts;
+    res.setHeader("Content-Type", "text/css");
+    res.send(`:root {
+  --font-family: ${f.family};
+  --title-size: ${f.titleSize};
+  --chapter-size: ${f.chapterSize};
+  --time-size: ${f.timeSize};
+  --status-size: ${f.statusSize};
+}`);
 });
 
 app.get("/", (req, res) => {

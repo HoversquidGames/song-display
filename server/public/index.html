@@ -4,8 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Media Overlay</title>
+  <link rel="stylesheet" href="/theme.css" />
   <style>
     :root {
+      --font-family: Arial, Helvetica, sans-serif;
       --title-size: 48px;
       --chapter-size: 28px;
       --time-size: 18px;
@@ -45,7 +47,7 @@
     }
 
     body {
-      font-family: Arial, Helvetica, sans-serif;
+      font-family: var(--font-family);
       color: var(--text-color);
       pointer-events: none;
     }
